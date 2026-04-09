@@ -1,25 +1,28 @@
 from flask import Flask, render_template_string, request
 import pymysql
 import sys
+import os  # IMPORTANT: You were missing this for os.environ
 
 app = Flask(__name__)
-
 
 # --- Database Connection Configuration ---
 def get_db_connection():
     try:
+        # On Railway, you must use Environment Variables. 
+        # Replace '127.0.0.1' with the Host Railway gives you in the DB tab.
         conn = pymysql.connect(
-            user="admin_bob",
-            password="Apt3090Password!",
-            host="127.0.0.1",
-            port=3306,
-            database="credit_card_vault",
+            user=os.environ.get("DB_USER", "admin_bob"),
+            password=os.environ.get("DB_PASS", "Apt3090Password!"),
+            host=os.environ.get("DB_HOST", "127.0.0.1"), 
+            port=int(os.environ.get("DB_PORT", 3306)),
+            database=os.environ.get("DB_NAME", "credit_card_vault")
         )
         return conn
     except pymysql.Error as e:
         print(f"Error connecting to pymysql: {e}")
-        sys.exit(1)
-
+        # On a server, don't use sys.exit(1) or the whole container crashes.
+        # Just return None and handle the error in the route.
+        return None
 
 # --- The HTML Form (The "UI") ---
 html_form = """
@@ -40,30 +43,29 @@ html_form = """
 </html>
 """
 
-
 @app.route("/")
 def index():
     return render_template_string(html_form)
 
-
 @app.route("/submit", methods=["POST"])
 def submit():
-    # 1. Capture data from the web form
     user_id = request.form["user_id"]
     name = request.form["name"]
     card_num = request.form["card_num"]
     cvv = request.form["cvv"]
     expiry = request.form["expiry"]
 
-    # 2. Connect to pymysql
     conn = get_db_connection()
+    if conn is None:
+        return "<h1>Error</h1><p>Could not connect to database.</p>"
+    
     cur = conn.cursor()
 
-    # 3. Encrypt and Insert (Using your AES logic)
     try:
+        # IMPORTANT: PyMySQL uses %s as placeholders, NOT ?
         query = """
             INSERT INTO credit_cards (user_id, card_holder_name, card_num_enc, cvv_enc, expiry_date) 
-            VALUES (?, ?, AES_ENCRYPT(?, 'verysecretkey'), AES_ENCRYPT(?, 'verysecretkey'), ?)
+            VALUES (%s, %s, AES_ENCRYPT(%s, 'verysecretkey'), AES_ENCRYPT(%s, 'verysecretkey'), %s)
         """
         cur.execute(query, (user_id, name, card_num, cvv, expiry))
         conn.commit()
@@ -72,7 +74,8 @@ def submit():
     except Exception as e:
         return f"<h1>Error</h1><p>{str(e)}</p>"
 
-
 if __name__ == "__main__":
-    # Runs the web server locally on port 5000
-    app.run(debug=True, port=5000)
+    # Get port from Railway environment or default to 5000
+    port = int(os.environ.get("PORT", 5000))
+    # host='0.0.0.0' is required so Railway can route traffic to the container
+    app.run(host='0.0.0.0', port=port, debug=False)
