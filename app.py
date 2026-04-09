@@ -1,5 +1,5 @@
 from flask import Flask, render_template_string, request
-import mariadb
+import pymysql
 import sys
 
 app = Flask(__name__)
@@ -8,7 +8,7 @@ app = Flask(__name__)
 # --- Database Connection Configuration ---
 def get_db_connection():
     try:
-        conn = mariadb.connect(
+        conn = pymysql.connect(
             user="admin_bob",
             password="Apt3090Password!",
             host="127.0.0.1",
@@ -16,8 +16,8 @@ def get_db_connection():
             database="credit_card_vault",
         )
         return conn
-    except mariadb.Error as e:
-        print(f"Error connecting to MariaDB: {e}")
+    except pymysql.Error as e:
+        print(f"Error connecting to pymysql: {e}")
         sys.exit(1)
 
 
@@ -55,7 +55,7 @@ def submit():
     cvv = request.form["cvv"]
     expiry = request.form["expiry"]
 
-    # 2. Connect to MariaDB
+    # 2. Connect to pymysql
     conn = get_db_connection()
     cur = conn.cursor()
 
